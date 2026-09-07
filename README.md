@@ -1,6 +1,10 @@
 # Hikvision Next
 
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/maciej-or/hikvision_next?style=flat-square) [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/Herbertmt978/hikvision_next?style=flat-square) [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+
+This is Herbertmt978's compatibility fork of [maciej-or/hikvision_next](https://github.com/maciej-or/hikvision_next). Version 1.1.2 repairs setup retries, camera device registration, diagnostic/image entity IDs and event handling on recent Home Assistant releases. Requires Home Assistant 2026.8 or later. Existing integration configuration and entity unique IDs are retained.
+
+Upstream does not include a license file. This fork does not assign a license and excludes only that check from HACS validation.
 
 The Home Assistant integration for Hikvision NVRs and IP cameras. Receives and switches detection of alarm events. Provides video streams.
 
@@ -59,11 +63,11 @@ The scope supported features depends on device model, setup and firmware version
 
 ## Installation
 
-[<img src="https://my.home-assistant.io/badges/hacs_repository.svg">](https://my.home-assistant.io/redirect/hacs_repository/?owner=maciej-or&repository=hikvision_next&category=integration)
+[<img src="https://my.home-assistant.io/badges/hacs_repository.svg">](https://my.home-assistant.io/redirect/hacs_repository/?owner=Herbertmt978&repository=hikvision_next&category=integration)
 
 ### With HACS
 
-1. This integration you will find in the default HACS store. Search for `Hikvision NVR / IP Camera` on `HACS / Integrations` page and press `Download` button
+1. Add `Herbertmt978/hikvision_next` to HACS as a custom repository with type `Integration`, then download it and restart Home Assistant. When replacing upstream, back up first and remove only its HACS download before installing this fork. Keep your existing Hikvision config entries in Settings / Devices & Services.
 2. on `Settings / Devices & Services` page press `+ Add Integration`
 3. Search for `Hikvision NVR / IP Camera` and add your Hikvision device using config dialog, repeat the last 2 steps for more devices
 

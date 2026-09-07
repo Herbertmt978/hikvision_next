@@ -6,10 +6,11 @@ requests-toolbelt==1.0.0
 pytest
 pytest-asyncio
 pytest-cov>=4.1.0
-pytest-homeassistant-custom-component>=0.13.179
+pytest-homeassistant-custom-component==0.13.364
 
 #
 async-timeout
 httpx
 respx
 aiohttp_cors
+PyTurboJPEG==1.8.3

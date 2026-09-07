@@ -12,6 +12,7 @@ from aiohttp import web
 from requests_toolbelt.multipart import MultipartDecoder
 
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONTENT_TYPE_TEXT_PLAIN, STATE_ON, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_registry import async_get
@@ -55,6 +56,8 @@ class EventNotificationsView(HomeAssistantView):
             _LOGGER.debug("alert info: %s", xml)
             alert = ISAPIClient.parse_event_notification(xml)
             self.device = self.get_isapi_device(request.remote, alert)
+            if self.device is None:
+                return web.Response(status=HTTPStatus.OK, content_type=CONTENT_TYPE_TEXT_PLAIN)
             self.update_alert_channel(alert)
             self.trigger_sensor(alert)
         except Exception as ex:  # pylint: disable=broad-except
@@ -63,41 +66,34 @@ class EventNotificationsView(HomeAssistantView):
         response = web.Response(status=HTTPStatus.OK, content_type=CONTENT_TYPE_TEXT_PLAIN)
         return response
 
-    def get_isapi_device(self, device_ip, alert: AlertInfo) -> HikvisionDevice:
+    def get_isapi_device(self, device_ip, alert: AlertInfo) -> HikvisionDevice | None:
         """Get integration instance for device sending alert."""
-        integration_entries = self.hass.config_entries.async_entries(DOMAIN)
-        instance_identifiers = []
+        integration_entries = [
+            item for item in self.hass.config_entries.async_entries(DOMAIN)
+            if not item.disabled_by and item.state is ConfigEntryState.LOADED
+        ]
         entry = None
-        if len(integration_entries) == 1:
-            entry = integration_entries[0]
-        else:
+        if integration_entries:
             # Search device by mac_address
             for item in integration_entries:
-                if item.disabled_by:
-                    continue
-
                 item_mac_address = item.runtime_data.device_info.mac_address
-                instance_identifiers.append(item_mac_address)
 
-                if item_mac_address == alert.mac:
+                if alert.mac and item_mac_address and item_mac_address.lower() == alert.mac.lower():
                     entry = item
                     break
 
             # Search device by ip_address
             if not entry:
                 for item in integration_entries:
-                    if item.disabled_by:
-                        continue
-
                     url = item.runtime_data.host
-                    instance_identifiers.append(url)
 
                     if self.get_ip(urlparse(url).hostname) == device_ip:
                         entry = item
                         break
 
         if not entry:
-            raise ValueError(f"Cannot find ISAPI instance for device {device_ip} in {instance_identifiers}")
+            _LOGGER.debug("Ignoring event from a device without a loaded entry: %s", device_ip)
+            return None
 
         return entry.runtime_data
 
@@ -187,7 +183,7 @@ class EventNotificationsView(HomeAssistantView):
                 self.hass.states.async_set(entity_id, STATE_ON, entity.attributes)
                 self.fire_hass_event(alert)
             return
-        raise ValueError(f"Entity not found {entity_id}")
+        _LOGGER.debug("Ignoring event without a registered binary sensor: %s", unique_id)
 
     def fire_hass_event(self, alert: AlertInfo):
         """Fire HASS event."""

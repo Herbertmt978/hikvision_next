@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 import logging
-import traceback
+import httpx
 from homeassistant.util import slugify
 from homeassistant.components.binary_sensor import (
     ENTITY_ID_FORMAT as BINARY_SENSOR_ENTITY_ID_FORMAT,
@@ -16,6 +16,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
@@ -25,6 +26,7 @@ from .notifications import EventNotificationsView
 from .services import setup_services
 
 _LOGGER = logging.getLogger(__name__)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
@@ -41,6 +43,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Hikvision component."""
 
     setup_services(hass)
+    hass.http.register_view(EventNotificationsView(hass))
 
     return True
 
@@ -53,25 +56,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: HikvisionConfigEntry) ->
         await device.get_hardware_info()
         device_info = device.hass_device_info()
         device_registry = dr.async_get(hass)
-        device_registry.async_get_or_create(config_entry_id=entry.entry_id, **device_info)
+        registry_entry = device_registry.async_get_or_create(config_entry_id=entry.entry_id, **device_info)
+        device.registry_device_id = registry_entry.id
+        await device.init_coordinators()
     except ISAPIUnauthorizedError as ex:
         raise ConfigEntryAuthFailed from ex
-    except Exception as ex:  # pylint: disable=broad-except
-        msg = f"Cannot initialize {DOMAIN} {device.host}. Error: {ex}\n"
-        _LOGGER.error(msg + traceback.format_exc())
+    except httpx.RequestError as ex:
+        msg = f"Cannot initialize {DOMAIN}: {type(ex).__name__}: {ex}"
         raise ConfigEntryNotReady(msg) from ex
 
     entry.runtime_data = device
 
-    await device.init_coordinators()
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     device.pending_initialization = False
-
-    # Only initialise view once if multiple instances of integration
-    if get_first_instance_unique_id(hass) == entry.unique_id:
-        hass.http.register_view(EventNotificationsView(hass))
 
     refresh_disabled_entities_in_registry(hass, device)
 
@@ -105,12 +103,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: HikvisionConfigEntry) -
             await device.set_alarm_server("http://0.0.0.0:80", "/")
 
     return unload_ok
-
-
-def get_first_instance_unique_id(hass: HomeAssistant) -> int:
-    """Get entry unique_id for first instance of integration."""
-    entry = [entry for entry in hass.config_entries.async_entries(DOMAIN) if not entry.disabled_by][0]
-    return entry.unique_id
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry):
